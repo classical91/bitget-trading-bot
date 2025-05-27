@@ -56,5 +56,17 @@ def webhook():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    try:
+        data = request.json
+        print("Webhook Received:", data)
+        print("API_KEY:", API_KEY)  # Debug print
+        result = place_order(data["action"], data["symbol"], data["amount"])
+        return jsonify(result)
+    except Exception as e:
+        print("Webhook Error:", str(e))
+        return jsonify({"error": str(e)}), 500
