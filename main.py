@@ -44,29 +44,20 @@ def webhook():
     try:
         data = request.json
         print("Webhook Received:", data)
+        print("API_KEY:", API_KEY)  # Debugging output
 
         required_keys = {"action", "symbol", "amount"}
         if not required_keys.issubset(data):
             return jsonify({"error": "Missing required keys in webhook payload"}), 400
 
         result = place_order(data["action"], data["symbol"], data["amount"])
+        print("Order Result:", result)
         return jsonify(result)
 
     except Exception as e:
+        print("Webhook Error:", str(e))
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    try:
-        data = request.json
-        print("Webhook Received:", data)
-        print("API_KEY:", API_KEY)  # Debug print
-        result = place_order(data["action"], data["symbol"], data["amount"])
-        return jsonify(result)
-    except Exception as e:
-        print("Webhook Error:", str(e))
-        return jsonify({"error": str(e)}), 500
