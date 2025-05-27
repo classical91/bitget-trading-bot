@@ -1,3 +1,8 @@
+from flask import Flask, request, jsonify
+import traceback
+
+app = Flask(__name__)
+
 @app.route('/webhook', methods=['POST'])
 def webhook():
     try:
@@ -13,7 +18,7 @@ def webhook():
         result = place_order(data["action"], data["symbol"], data["amount"])
         print("Order Result:", result)
         return jsonify(result)
-
     except Exception as e:
-        print("Webhook Error:", str(e))  # ✅ Will show up in Railway Logs
+        print("Webhook Error:", str(e))
+        traceback.print_exc()  # This prints the full error stack
         return jsonify({"error": str(e)}), 500
