@@ -101,20 +101,32 @@ def webhook():
             return 'bad request', 400
         print(f"Webhook Received: {data}")
 
-        if isinstance(data, dict):
-            # Directly submit the received payload to Bitget (for single-asset, one-way mode)
-            # Remove posSide if included by mistake
-            payload = data.copy()
-            if "posSide" in payload:
-                del payload["posSide"]
-            response = place_order_raw(payload)  # see below
-            print("Order response:", response)
-        else:
-            print("Webhook data is not a dictionary:", data)
-        return 'ok', 200
+        # Mapping incoming webhook correctly
+        action = data.get("action")
+        symbol = data.get("symbol")
+        amount = data.get("amount")
+
+        if not all([action, symbol, amount]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        mapped_payload = {
+            "symbol": symbol,
+            "marginCoin": "USDT",  # Required by Bitget
+            "size": str(amount),
+            "side": ACTION_MAP[action]["side"],
+            "orderType": "market",
+            "posSide": ACTION_MAP[action]["posSide"]
+        }
+
+        response = place_order_raw(mapped_payload)
+        print("Order response:", response)
+
+        return jsonify(response), 200
     except Exception as e:
         print(f"Error: {e}")
-        return 'bad request', 400
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
+
 
 # ---------------------------------------------------------------------------
 # Ping route (optional)
