@@ -101,24 +101,14 @@ def webhook():
             return 'bad request', 400
         print(f"Webhook Received: {data}")
 
-        # Mapping incoming webhook correctly
-        action = data.get("action")
-        symbol = data.get("symbol")
-        amount = data.get("amount")
+        required_fields = {"symbol", "marginCoin", "size", "side", "orderType", "posSide"}
 
-        if not all([action, symbol, amount]):
+        if not all(field in data for field in required_fields):
             return jsonify({"error": "Missing required fields"}), 400
 
-        mapped_payload = {
-            "symbol": symbol,
-            "marginCoin": "USDT",  # Required by Bitget
-            "size": str(amount),
-            "side": ACTION_MAP[action]["side"],
-            "orderType": "market",
-            "posSide": ACTION_MAP[action]["posSide"]
-        }
+        payload = {field: data[field] for field in required_fields}
 
-        response = place_order_raw(mapped_payload)
+        response = place_order_raw(payload)
         print("Order response:", response)
 
         return jsonify(response), 200
@@ -126,7 +116,6 @@ def webhook():
         print(f"Error: {e}")
         traceback.print_exc()
         return jsonify({"error": str(e)}), 400
-
 
 # ---------------------------------------------------------------------------
 # Ping route (optional)
