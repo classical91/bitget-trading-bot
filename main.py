@@ -38,7 +38,7 @@ ORDER_ENDPOINT = "/api/mix/v1/order/placeOrder"
 # ---------------------------------------------------------------------------
 # CONFIG: Set to True if your Bitget account is in Hedge Mode (dual positions)
 # ---------------------------------------------------------------------------
-IS_HEDGE_MODE = False  # <-- CHANGE to True if you use Hedge Mode in Bitget
+IS_HEDGE_MODE = True  # <-- CHANGE to True if you use Hedge Mode in Bitget
 
 # ---------------------------------------------------------------------------
 # Utility: sign request
@@ -133,3 +133,17 @@ def index():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8080)))
+
+import sys, traceback
+
+def _dump_startup_errors():
+    try:
+        yield
+    except Exception:
+        print("\n🔥  Fatal startup exception:\n")
+        traceback.print_exc()
+        sys.exit(1)
+
+with _dump_startup_errors():
+    pass  # the rest of the file is already executed, this just wraps it
+
