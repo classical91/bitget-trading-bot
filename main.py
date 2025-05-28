@@ -1,18 +1,10 @@
 """main.py – Production-ready Bitget webhook handler
 --------------------------------------------------
-✅ Receives TradingView/any JSON webhook in the format
+Receives TradingView/any JSON webhook in the format
    {"action": "open_long", "symbol": "BTCUSDT", "amount": 0.001}
-✅ Maps the action to Bitget USDT‑M Futures side + positionAction
-✅ Signs and submits a *market* order to Bitget’s unified‑contracts (mix) API
-✅ Logs the full Bitget API response so you always know what happened
-
-Environment variables required in Railway (‑> *Variables* tab):
-    BITGET_API_KEY          – your Bitget API key
-    BITGET_API_SECRET       – your API secret
-    BITGET_API_PASSPHRASE   – the passphrase you set when creating the key
-    BITGET_SUBACCOUNT_UID   – optional, only if you trade from a sub‑UID
-
-Install deps (already in requirements.txt): Flask, requests.
+Maps the action to Bitget USDT‑M Futures side + positionAction
+Signs and submits a *market* order to Bitget’s unified‑contracts (mix) API
+Logs the full Bitget API response so you always know what happened
 """
 from __future__ import annotations
 
@@ -25,12 +17,12 @@ import base64
 import traceback
 
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request
 
 app = Flask(__name__)
 
 # ---------------------------------------------------------------------------
-# Bitget credentials pulled from env (never hard‑code sensitive info!)
+# Bitget credentials pulled from env
 # ---------------------------------------------------------------------------
 API_KEY: str | None = os.getenv("BITGET_API_KEY")
 API_SECRET: str | None = os.getenv("BITGET_API_SECRET")
@@ -41,7 +33,7 @@ if not all([API_KEY, API_SECRET, API_PASSPHRASE]):
     print("⚠️  Bitget API environment variables are missing — orders will fail!")
 
 BITGET_BASE = "https://api.bitget.com"
-ORDER_ENDPOINT = "/api/mix/v1/order/placeOrder"  # USDT‑M futures/linear contracts
+ORDER_ENDPOINT = "/api/mix/v1/order/placeOrder"
 
 # ---------------------------------------------------------------------------
 # CONFIG: Set to True if your Bitget account is in Hedge Mode (dual positions)
@@ -49,11 +41,9 @@ ORDER_ENDPOINT = "/api/mix/v1/order/placeOrder"  # USDT‑M futures/linear contr
 IS_HEDGE_MODE = False  # <-- CHANGE to True if you use Hedge Mode in Bitget
 
 # ---------------------------------------------------------------------------
-# Utility: sign request ------------------------------------------------------
+# Utility: sign request
 # ---------------------------------------------------------------------------
-
 def _bitget_sign(timestamp: str, method: str, path: str, body: str) -> str:
-    """Return base64‑encoded HMAC‑SHA256 signature."""
     prehash = f"{timestamp}{method}{path}{body}"
     digest = hmac.new(API_SECRET.encode(), prehash.encode(), hashlib.sha256).digest()
     return base64.b64encode(digest).decode()
@@ -69,8 +59,8 @@ ACTION_MAP = {
 }
 
 # ---------------------------------------------------------------------------
-# Core order function --------------------------------------------------------
-
+# Core order function
+# ---------------------------------------------------------------------------
 def place_order(action: str, symbol: str, amount: float):
     """Submit a market order to Bitget and return the JSON response."""
     try:
@@ -85,13 +75,12 @@ def place_order(action: str, symbol: str, amount: float):
             "side": side_info["side"],
             "orderType": "market",
         }
-        # Only include posSide if in Hedge Mode
         if IS_HEDGE_MODE:
             payload["posSide"] = side_info["posSide"]
         if SUB_UID:
             payload["subUid"] = SUB_UID
 
-        body = json.dumps(payload, separators=(",", ":"))  # compact JSON
+        body = json.dumps(payload, separators=(",", ":"))
         ts = str(int(time.time() * 1000))
         signature = _bitget_sign(ts, "POST", ORDER_ENDPOINT, body)
 
@@ -115,24 +104,29 @@ def place_order(action: str, symbol: str, amount: float):
         return {"error": str(err)}
 
 # ---------------------------------------------------------------------------
-# Flask webhook route -------------------------------------------------------
+# Flask webhook route (RECOMMENDED VERSION)
+# ---------------------------------------------------------------------------
+from flask import jsonify  # Make sure this is imported!
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    try:
-        data = request.get_json(force=True, silent=True)
-        if data is None:
-            data = request.data.decode('utf-8')
-        print(f"Webhook Received: {data}")
-        return 'ok', 200
-    except Exception as e:
-        import traceback
-        print(f"Error: {e}")
-        traceback.print_exc()   # <--- This will show you the full error in the logs!
-        return 'bad request', 400
+    data = request.json
+    print(f"Webhook received: {data}")
+
+    # Extract action, symbol, amount from webhook payload
+    action = data.get('action')
+    symbol = data.get('symbol')
+    amount = data.get('amount')
+
+    # Call the actual Bitget order function
+    response = place_order(action, symbol, amount)
+
+    print(f"Bitget API response: {response}")
+    return jsonify({'result': response})
 
 # ---------------------------------------------------------------------------
-# Ping route (optional) -----------------------------------------------------
+# Ping route (optional)
+# ---------------------------------------------------------------------------
 @app.route("/", methods=["GET"])
 def index():
     return "Bitget trading bot is up!", 200
