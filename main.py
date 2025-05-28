@@ -25,7 +25,7 @@ app = Flask(__name__)
 # Bitget credentials pulled from env
 # ---------------------------------------------------------------------------
 API_KEY: str | None = os.getenv("BITGET_API_KEY")
-API_SECRET: str | None = os.getenv("BITGET_API_SECRET")
+API_SECRET: str | None = os.getenv("BITGET_API_SECRET") 
 API_PASSPHRASE: str | None = os.getenv("BITGET_API_PASSPHRASE")
 SUB_UID: str | None = os.getenv("BITGET_SUBACCOUNT_UID")  # optional
 
@@ -61,25 +61,8 @@ ACTION_MAP = {
 # ---------------------------------------------------------------------------
 # Core order function
 # ---------------------------------------------------------------------------
-def place_order(action: str, symbol: str, amount: float):
-    """Submit a market order to Bitget and return the JSON response."""
+def place_order_raw(payload):
     try:
-        if action not in ACTION_MAP:
-            raise ValueError(f"Unsupported action '{action}'. Must be one of: {list(ACTION_MAP)}")
-
-        side_info = ACTION_MAP[action]
-        payload = {
-            "symbol": symbol,          # e.g. BTCUSDT
-            "marginCoin": "USDT",      # USDT‑M contracts
-            "size": str(amount),       # string per API spec
-            "side": side_info["side"],
-            "orderType": "market",
-        }
-        if IS_HEDGE_MODE:
-            payload["posSide"] = side_info["posSide"]
-        if SUB_UID:
-            payload["subUid"] = SUB_UID
-
         body = json.dumps(payload, separators=(",", ":"))
         ts = str(int(time.time() * 1000))
         signature = _bitget_sign(ts, "POST", ORDER_ENDPOINT, body)
@@ -97,11 +80,11 @@ def place_order(action: str, symbol: str, amount: float):
         print("Bitget response status:", resp.status_code)
         print("Bitget response text:", resp.text)
         return resp.json() if resp.headers.get("Content-Type", "").startswith("application/json") else {"raw": resp.text}
-
     except Exception as err:
-        print("❌ Error in place_order:", err)
+        print("❌ Error in place_order_raw:", err)
         traceback.print_exc()
         return {"error": str(err)}
+
 
 # ---------------------------------------------------------------------------
 # Flask webhook route (RECOMMENDED VERSION)
@@ -110,19 +93,28 @@ from flask import jsonify  # Make sure this is imported!
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.json
-    print(f"Webhook received: {data}")
+    try:
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            data = request.data.decode('utf-8')
+            print("Webhook data as text:", data)
+            return 'bad request', 400
+        print(f"Webhook Received: {data}")
 
-    # Extract action, symbol, amount from webhook payload
-    action = data.get('action')
-    symbol = data.get('symbol')
-    amount = data.get('amount')
-
-    # Call the actual Bitget order function
-    response = place_order(action, symbol, amount)
-
-    print(f"Bitget API response: {response}")
-    return jsonify({'result': response})
+        if isinstance(data, dict):
+            # Directly submit the received payload to Bitget (for single-asset, one-way mode)
+            # Remove posSide if included by mistake
+            payload = data.copy()
+            if "posSide" in payload:
+                del payload["posSide"]
+            response = place_order_raw(payload)  # see below
+            print("Order response:", response)
+        else:
+            print("Webhook data is not a dictionary:", data)
+        return 'ok', 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return 'bad request', 400
 
 # ---------------------------------------------------------------------------
 # Ping route (optional)
