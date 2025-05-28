@@ -1,4 +1,4 @@
-"""main.py – Production‑ready Bitget webhook handler
+"""main.py – Production-ready Bitget webhook handler
 --------------------------------------------------
 ✅ Receives TradingView/any JSON webhook in the format
    {"action": "open_long", "symbol": "BTCUSDT", "amount": 0.001}
@@ -44,6 +44,11 @@ BITGET_BASE = "https://api.bitget.com"
 ORDER_ENDPOINT = "/api/mix/v1/order/placeOrder"  # USDT‑M futures/linear contracts
 
 # ---------------------------------------------------------------------------
+# CONFIG: Set to True if your Bitget account is in Hedge Mode (dual positions)
+# ---------------------------------------------------------------------------
+IS_HEDGE_MODE = False  # <-- CHANGE to True if you use Hedge Mode in Bitget
+
+# ---------------------------------------------------------------------------
 # Utility: sign request ------------------------------------------------------
 # ---------------------------------------------------------------------------
 
@@ -65,7 +70,6 @@ ACTION_MAP = {
 
 # ---------------------------------------------------------------------------
 # Core order function --------------------------------------------------------
-# ---------------------------------------------------------------------------
 
 def place_order(action: str, symbol: str, amount: float):
     """Submit a market order to Bitget and return the JSON response."""
@@ -76,12 +80,14 @@ def place_order(action: str, symbol: str, amount: float):
         side_info = ACTION_MAP[action]
         payload = {
             "symbol": symbol,          # e.g. BTCUSDT
-            "marginCoin": "USDT",    # USDT‑M contracts
-            "size": str(amount),      # string per API spec
+            "marginCoin": "USDT",      # USDT‑M contracts
+            "size": str(amount),       # string per API spec
             "side": side_info["side"],
             "orderType": "market",
-            "posSide": side_info["posSide"],
         }
+        # Only include posSide if in Hedge Mode
+        if IS_HEDGE_MODE:
+            payload["posSide"] = side_info["posSide"]
         if SUB_UID:
             payload["subUid"] = SUB_UID
 
@@ -110,31 +116,21 @@ def place_order(action: str, symbol: str, amount: float):
 
 # ---------------------------------------------------------------------------
 # Flask webhook route -------------------------------------------------------
-# ---------------------------------------------------------------------------
 
-@app.route("/webhook", methods=["POST"])
+@app.route('/webhook', methods=['POST'])
 def webhook():
     try:
-        data = request.get_json(force=True)
-        print("Webhook Received:", data)
-
-        # Basic validation -----------------------------------------------
-        required = {"action", "symbol", "amount"}
-        if not required.issubset(data):
-            return jsonify({"error": f"Missing fields — required {required}"}), 400
-
-        result = place_order(str(data["action"]).lower(), data["symbol"], float(data["amount"]))
-        print("Order Result:", result)
-        return jsonify(result)
-
+        data = request.get_json(force=True, silent=True)
+        if data is None:
+            data = request.data.decode('utf-8')
+        print(f"Webhook Received: {data}")
+        return 'ok', 200   # <--- MAKE SURE IT'S 200!
     except Exception as e:
-        print("Webhook Error:", e)
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        print(f"Error: {e}")
+        return 'bad request', 400
 
 # ---------------------------------------------------------------------------
 # Ping route (optional) -----------------------------------------------------
-# ---------------------------------------------------------------------------
 @app.route("/", methods=["GET"])
 def index():
     return "Bitget trading bot is up!", 200
