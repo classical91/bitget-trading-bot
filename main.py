@@ -124,9 +124,11 @@ def webhook():
         if data is None:
             data = request.data.decode('utf-8')
         print(f"Webhook Received: {data}")
-        return 'ok', 200   # <--- MAKE SURE IT'S 200!
+        return 'ok', 200
     except Exception as e:
+        import traceback
         print(f"Error: {e}")
+        traceback.print_exc()   # <--- This will show you the full error in the logs!
         return 'bad request', 400
 
 # ---------------------------------------------------------------------------
